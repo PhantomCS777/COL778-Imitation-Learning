@@ -14,6 +14,14 @@ import utils.pytorch_util as ptu
 from policies.experts import load_expert_policy
 
 
+# NOTE
+"""
+What is current train env steps?
+
+
+"""
+
+
 
 class ImitationAgent(BaseAgent):
     '''
@@ -42,29 +50,37 @@ class ImitationAgent(BaseAgent):
         
 
         #initialize your model and optimizer and other variables you may need
-        self.optimizer = None 
+        self.model = ptu.build_mlp(self.observation_dim, self.action_dim, self.hyperparameters["n_layers"], self.hyperparameters["hidden_size"])
+        self.model.to(ptu.device)
 
+        self.optimizer = optim.Adam(self.model.parameters(), lr = 3e-4)
+        self.criterion = nn.MSELoss()
+        self.batch_size = self.hyperparameters["batch_size"]
+        self.beta = 1
         
 
     def forward(self, observation: torch.FloatTensor):
         #*********YOUR CODE HERE******************
-        action = None #change this to your action
-        return action
+        return self.model(observation)
 
 
     @torch.no_grad()
     def get_action(self, observation: torch.FloatTensor):
         #*********YOUR CODE HERE******************
-        
-        action = None #change this to your action
-        return action 
-
+        return self.model(observation)
     
     
     def update(self, observations, actions):
         #*********YOUR CODE HERE******************
-        
-        pass
+        self.model.train()
+        observations = ptu.from_numpy(observations).float().to(ptu.device)
+        actions = ptu.from_numpy(actions).to(ptu.device)
+
+        loss = self.criterion(self.forward(observations), actions)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss.item()
     
 
 
@@ -77,7 +93,20 @@ class ImitationAgent(BaseAgent):
             # for example: sample = self.replay_buffer.sample_batch(32)
         
         #*********YOUR CODE HERE******************
-        
-        return {'episode_loss': None, 'trajectories': None, 'current_train_envsteps': None} #you can return more metadata if you want to
+        max_len = 10
+        num_traj = 1
+
+        if(np.random.rand() < self.beta):
+            trajectories = utils.sample_n_trajectories(env, self.expert_policy, num_traj, max_len)
+        else:
+            trajectories = utils.sample_n_trajectories(env, self.model, num_traj, max_len)
+
+
+        self.replay_buffer.add_rollouts(trajectories)
+        batch = self.replay_buffer.sample_batch(self.batch_size)
+        loss = self.update(batch["obs"], batch["acs"])
+
+
+        return {'episode_loss': loss, 'trajectories': trajectories, 'current_train_envsteps': 0} #you can return more metadata if you want to
 
 
