@@ -16,10 +16,100 @@ from policies.experts import load_expert_policy
 
 # NOTE
 """
+What is the criterion for my model
+
 What is current train env steps?
+
+Why arent we doing argmax anywhere
 
 
 """
+
+def sample_trajectory_mod(
+    env, exp_policy, new_policy, beta, max_length, render = False
+):
+    """Sample a rollout in the environment from a policy."""
+    ob = env.reset()
+    obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
+    steps = 0
+
+    while True:
+        # render an image
+        if render:
+            # breakpoint()
+            if hasattr(env, "sim"):
+                img = env.sim.render(camera_name="track", height=500, width=500)[::-1]
+            else:
+                img = env.render(mode='single_rgb_array')
+            image_obs.append(
+                cv2.resize(img, dsize=(250, 250), interpolation=cv2.INTER_CUBIC)
+            )
+
+        #use the most recent ob to decide what to do
+        in_ = torch.tensor(ob).to(ptu.device,torch.float)
+        in_ = in_.unsqueeze(0)
+        if(np.random.rand() < beta):
+            ac = exp_policy.get_action(in_)
+        else:
+            ac = new_policy(in_)
+            ac = ac.detach().cpu().numpy() # HINT: this is a numpy array
+        ac = ac[0]
+
+        # Take that action and get reward and next ob
+        next_ob, rew, terminated, _ = env.step(ac)
+        
+        # Rollout can end due to done, or due to max_path_length
+        steps += 1
+        rollout_done = (terminated) or (steps >= max_length) # HINT: this is either 0 or 1
+
+        # record result of taking that action
+        obs.append(ob)
+        acs.append(ac)
+        rewards.append(rew)
+        next_obs.append(next_ob)
+        terminals.append(rollout_done)
+
+        ob = next_ob  # jump to next timestep
+
+        # end the rollout if the rollout ended
+        if rollout_done:
+            break
+
+    return {
+        "observation": np.array(obs, dtype=np.float32),
+        "image_obs": np.array(image_obs, dtype=np.uint8),
+        "reward": np.array(rewards, dtype=np.float32),
+        "action": np.array(acs, dtype=np.float32),
+        "next_observation": np.array(next_obs, dtype=np.float32),
+        "terminal": np.array(terminals, dtype=np.float32),
+    }
+
+
+
+def sample_n_trajectories_mod(
+    env, exp_policy, new_policy, beta, ntraj, max_length, render = False
+):
+    """Collect ntraj rollouts."""
+    trajs = []
+    for _ in range(ntraj):
+        # collect rollout
+        traj = sample_trajectory_mod(env, exp_policy, new_policy, beta, max_length, render)
+        trajs.append(traj)
+    return trajs
+
+
+
+
+def exp_runner(exp_policy, trajectories):
+    for traj in trajectories:
+        for ind, obs in enumerate(traj["observation"]):
+            traj["action"][ind] = exp_policy.get_action(torch.tensor(obs).to(ptu.device, torch.float))
+            traj["action"][ind] = traj["action"][ind][0]
+    return trajectories
+
+
+
+
 
 
 
@@ -96,11 +186,9 @@ class ImitationAgent(BaseAgent):
         max_len = 10
         num_traj = 1
 
-        if(np.random.rand() < self.beta):
-            trajectories = utils.sample_n_trajectories(env, self.expert_policy, num_traj, max_len)
-        else:
-            trajectories = utils.sample_n_trajectories(env, self.model, num_traj, max_len)
+        trajectories = sample_n_trajectories_mod(env, self.expert_policy, self.model, self.beta, num_traj, max_len)
 
+        trajectories = exp_runner(self.expert_policy, trajectories)
 
         self.replay_buffer.add_rollouts(trajectories)
         batch = self.replay_buffer.sample_batch(self.batch_size)
