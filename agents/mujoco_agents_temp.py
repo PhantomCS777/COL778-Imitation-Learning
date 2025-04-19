@@ -143,27 +143,17 @@ class ImitationAgent(BaseAgent):
         self.observation_dim = observation_dim
         self.is_action_discrete = discrete
         self.args = args
-        self.replay_buffer = ReplayBuffer(5000) #you can set the max size of replay buffer if you want
+        self.replay_buffer = ReplayBuffer(10000) #you can set the max size of replay buffer if you want
         
 
         #initialize your model and optimizer and other variables you may need
         self.model = ptu.build_mlp(self.observation_dim, self.action_dim, self.hyperparameters["n_layers"], self.hyperparameters["hidden_size"],activation='relu')
-        nn.Sequential(
-                nn.LayerNorm(self.observation_dim),
-                nn.Linear(self.observation_dim, 4*self.observation_dim),
-                nn.LeakyReLU(),
-                nn.Linear(4*self.observation_dim, 2*self.observation_dim),
-                nn.LayerNorm(2*self.observation_dim),
-                nn.Linear(2*self.observation_dim, self.action_dim),
-                nn.Tanh()
-            )
         self.model.to(ptu.device)
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr = 1e-3)
-        self.criterion = nn.MSELoss(reduction='sum')
+        self.optimizer = optim.Adam(self.model.parameters(), lr = 3e-4)
+        self.criterion = nn.MSELoss()
         self.batch_size = self.hyperparameters["batch_size"]
-        self.beta = 0.5
-        self.iter = 0 
+        self.beta = 0.7
         
 
     def forward(self, observation: torch.FloatTensor):
@@ -202,19 +192,18 @@ class ImitationAgent(BaseAgent):
             # for example: sample = self.replay_buffer.sample_batch(32)
         
         #*********YOUR CODE HERE******************
-        max_len = 400
-        num_traj = 50
+        max_len = 10000
+        num_traj = 200
+
         trajectories = sample_n_trajectories_mod(env, self.expert_policy, self.model, self.beta, num_traj, max_len)
 
         trajectories = exp_runner(self.expert_policy, trajectories)
 
         self.replay_buffer.add_rollouts(trajectories)
-        for _ in range(10):
-            batch = self.replay_buffer.sample_batch(self.batch_size)
-            loss = self.update(batch["obs"], batch["acs"]) 
-        # self.beta = min(0.5,0.8*self.beta)
-        self.beta = self.beta/(1+self.iter/1000)
-        self.iter += 1 
+        batch = self.replay_buffer.sample_batch(self.batch_size)
+        loss = self.update(batch["obs"], batch["acs"])
+        self.beta = min(0.5,0.8*self.beta)
+
         return {'episode_loss': loss, 'trajectories': trajectories, 'current_train_envsteps': 0} #you can return more metadata if you want to
 
 

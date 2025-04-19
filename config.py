@@ -11,11 +11,14 @@ configs = {
     'Hopper-v4': {
             #You can add or change the keys here
               "hyperparameters": {
-                'hidden_size': 10,
-                'n_layers': 2,
-                'batch_size': 10, 
+                'hidden_size': 100,
+                'n_layers': 6,
+                'batch_size': 128, 
+                 "ntraj" : 50,
+                "maxtraj" : 400,
             },
-            "num_iteration": 100,
+            "normalize": True,
+            "num_iteration": 1000,
     },
     
     
