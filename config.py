@@ -13,7 +13,7 @@ configs = {
               "hyperparameters": {
                 'hidden_size': 100,
                 'n_layers': 6,
-                'batch_size': 128, 
+                'batch_size': 50, 
                  "ntraj" : 50,
                 "maxtraj" : 400,
             },
