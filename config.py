@@ -13,11 +13,10 @@ configs = {
               "hyperparameters": {
                 'hidden_size': 100,
                 'n_layers': 6,
-                'batch_size': 50, 
-                 "ntraj" : 50,
-                "maxtraj" : 400,
+                'batch_size': 25, 
+                "num_traj" : 25,
+                "max_len" : 1000,
             },
-            "normalize": True,
             "num_iteration": 1000,
     },
     
@@ -25,11 +24,13 @@ configs = {
     'Ant-v4': {
             #You can add or change the keys here
               "hyperparameters": {
-                'hidden_size': None,
-                'n_layers': None,
-                'batch_size': None, 
+                'hidden_size': 100,
+                'n_layers': 6,
+                'batch_size': 25, 
+                "num_traj" : 25,
+                "max_len" : 1000,
             },
-            "num_iteration": 100,
+            "num_iteration": 1000,
     }
 
 }

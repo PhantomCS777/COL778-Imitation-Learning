@@ -51,7 +51,7 @@ def sample_trajectory_mod(
         if(np.random.rand() < beta):
             ac = exp_policy.get_action(in_)
         else:
-            ac = new_policy((normalize(in_, 0)))
+            ac = new_policy(in_)
             ac = ac.detach().cpu().numpy() # HINT: this is a numpy array
         ac = ac[0]
 
@@ -100,27 +100,12 @@ def sample_n_trajectories_mod(
 
 
 
-def exp_runner(exp_policy, trajectories,beta=1):
+def exp_runner(exp_policy, trajectories):
     for traj in trajectories:
         for ind, obs in enumerate(traj["observation"]):
-            if (np.random.rand() < beta):
-                traj["action"][ind] = exp_policy.get_action(torch.tensor(obs).to(ptu.device, torch.float))
-           
-
-            # traj["action"][ind] = exp_policy.get_action(torch.tensor(obs).to(ptu.device, torch.float))
-            traj["action"][ind] = traj["action"][ind][0]
+            traj["action"][ind] = exp_policy.get_action(torch.tensor(obs).to(ptu.device, torch.float))
     return trajectories
 
-
-
-def normalize(observation, observation_dim):
-    """
-    Normalize the observation to have mean 0 and std 1.
-    """
-    return observation
-    observation = observation - observation.mean(dim=0)
-    observation = observation / (observation.std(dim=0) + 1e-8)
-    return observation
 
 
 
@@ -151,35 +136,36 @@ class ImitationAgent(BaseAgent):
         
 
         #initialize your model and optimizer and other variables you may need
-        self.model = ptu.build_mlp(self.observation_dim, self.action_dim, self.hyperparameters["n_layers"], self.hyperparameters["hidden_size"],activation='relu')
         self.model = nn.Sequential(
-                nn.LayerNorm(self.observation_dim),
-                nn.Linear(self.observation_dim, 4*self.observation_dim),
-                nn.LeakyReLU(),
+                nn.Linear(self.observation_dim, 8*self.observation_dim),
+                nn.ReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(8*self.observation_dim, 4*self.observation_dim),
+                nn.ReLU(),
+                nn.Dropout(0.1),
                 nn.Linear(4*self.observation_dim, 2*self.observation_dim),
-                nn.LayerNorm(2*self.observation_dim),
+                nn.ReLU(),
                 nn.Linear(2*self.observation_dim, self.action_dim),
-                nn.Tanh()
             )
         self.model.to(ptu.device)
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr = 1e-3)
-        self.criterion = nn.MSELoss(reduction='mean')
+        self.optimizer = optim.Adam(self.model.parameters(), lr = 3e-4)
+        self.criterion = nn.MSELoss()
         self.batch_size = self.hyperparameters["batch_size"]
-        self.beta = 1*0.6
-        self.iter = 0 
+        self.num_traj = self.hyperparameters["num_traj"]
+        self.max_len = self.hyperparameters["max_len"]
+        self.beta = 0.8
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=1000, gamma=0.99)
         
 
     def forward(self, observation: torch.FloatTensor):
         #*********YOUR CODE HERE******************
-        normalize(observation, self.observation_dim)
         return self.model(observation)
 
 
     @torch.no_grad()
     def get_action(self, observation: torch.FloatTensor):
         #*********YOUR CODE HERE******************
-        normalize(observation, self.observation_dim)    
         return self.model(observation)
     
     
@@ -193,6 +179,8 @@ class ImitationAgent(BaseAgent):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        self.scheduler.step()
+
         return loss.item()
     
 
@@ -206,30 +194,16 @@ class ImitationAgent(BaseAgent):
             # for example: sample = self.replay_buffer.sample_batch(32)
         
         #*********YOUR CODE HERE******************
-        max_len = 400
-        num_traj = 50
-        trajectories = sample_n_trajectories_mod(env, self.expert_policy, self.model, self.beta, num_traj, max_len)
+        trajectories = sample_n_trajectories_mod(env, self.expert_policy, self.model, self.beta, self.num_traj, self.max_len)
 
-        # trajectories = exp_runner(self.expert_policy, trajectories,self.beta)
+        trajectories = exp_runner(self.expert_policy, trajectories)
 
-        for _ in range(len(trajectories)):
-            rand_int = random.randint(0, len(self.replay_buffer.paths)-1)
-            # replay_traj = self.replay_buffer.paths[_]
-            replay_traj = trajectories[_]
-            # batch = self.replay_buffer.sample_batch(self.batch_size)
-            for i in range(len(replay_traj["observation"])):
-                loss = self.update(replay_traj["observation"][i], replay_traj["action"][i])
-            # loss = self.update(batch["obs"], batch["acs"]) 
-        # self.beta = min(0.5,0.8*self.beta)
-        for _ in range(10):
-            rand_int = random.randint(0, len(self.replay_buffer.paths)-1)
-            replay_traj = self.replay_buffer.paths[rand_int]
-            # batch = self.replay_buffer.sample_batch(self.batch_size)
-            for i in range(len(replay_traj["observation"])):
-                loss = self.update(replay_traj["observation"][i], replay_traj["action"][i])
-        self.beta = self.beta/(1+envsteps_so_far/1000)
-        self.iter += 1 
+        for _ in range(self.batch_size):
+            buff_traj = self.replay_buffer.paths[random.randint(0, len(self.replay_buffer.paths)-1)]
+            for ind in range(len(buff_traj["observation"])):
+                loss = self.update(buff_traj["observation"][ind], buff_traj["action"][ind])
+        self.beta = self.beta*0.97
         self.replay_buffer.add_rollouts(trajectories)
-        return {'episode_loss': loss, 'trajectories': trajectories, 'current_train_envsteps': num_traj} #you can return more metadata if you want to
+        return {'episode_loss': loss, 'trajectories': trajectories, 'current_train_envsteps': self.num_traj} #you can return more metadata if you want to
 
 
