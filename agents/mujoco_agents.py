@@ -101,9 +101,11 @@ def sample_n_trajectories_mod(
 
 
 def exp_runner(exp_policy, trajectories):
+
     for traj in trajectories:
-        for ind, obs in enumerate(traj["observation"]):
-            traj["action"][ind] = exp_policy.get_action(torch.tensor(obs).to(ptu.device, torch.float))
+        traj["action"] = exp_policy.get_action(torch.tensor(traj["observation"]).to(ptu.device, torch.float))
+        # for ind, obs in enumerate(traj["observation"]):
+        #     traj["action"][ind] = exp_policy.get_action(torch.tensor(obs).to(ptu.device, torch.float))
     return trajectories
 
 
@@ -132,19 +134,19 @@ class ImitationAgent(BaseAgent):
         self.observation_dim = observation_dim
         self.is_action_discrete = discrete
         self.args = args
-        self.replay_buffer = ReplayBuffer(5000) #you can set the max size of replay buffer if you want
+        self.replay_buffer = ReplayBuffer(400) #you can set the max size of replay buffer if you want
         
 
         #initialize your model and optimizer and other variables you may need
         self.model = nn.Sequential(
                 nn.Linear(self.observation_dim, 8*self.observation_dim),
-                nn.ReLU(),
+                nn.LeakyReLU(),
                 nn.Dropout(0.2),
                 nn.Linear(8*self.observation_dim, 4*self.observation_dim),
-                nn.ReLU(),
+                nn.LeakyReLU(),
                 nn.Dropout(0.1),
                 nn.Linear(4*self.observation_dim, 2*self.observation_dim),
-                nn.ReLU(),
+                nn.LeakyReLU(),
                 nn.Linear(2*self.observation_dim, self.action_dim),
             )
         self.model.to(ptu.device)
@@ -155,7 +157,7 @@ class ImitationAgent(BaseAgent):
         self.num_traj = self.hyperparameters["num_traj"]
         self.max_len = self.hyperparameters["max_len"]
         self.beta = 0.8
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=1000, gamma=0.99)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
         
 
     def forward(self, observation: torch.FloatTensor):
@@ -180,7 +182,6 @@ class ImitationAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
         self.scheduler.step()
-
         return loss.item()
     
 
@@ -197,13 +198,30 @@ class ImitationAgent(BaseAgent):
         trajectories = sample_n_trajectories_mod(env, self.expert_policy, self.model, self.beta, self.num_traj, self.max_len)
 
         trajectories = exp_runner(self.expert_policy, trajectories)
-
-        for _ in range(self.batch_size):
-            buff_traj = self.replay_buffer.paths[random.randint(0, len(self.replay_buffer.paths)-1)]
-            for ind in range(len(buff_traj["observation"])):
-                loss = self.update(buff_traj["observation"][ind], buff_traj["action"][ind])
-        self.beta = self.beta*0.97
+        # batch = self.replay_buffer.sample_batch(self.batch_size)
+        # loss = self.update(batch["obs"], batch["acs"])
+        # for _ in range(self.batch_size):
+        #     buff_traj = self.replay_buffer.paths[random.randint(0, len(self.replay_buffer.paths)-1)]
+        #     for ind in range(len(buff_traj["observation"])):
+        #         loss = self.update(buff_traj["observation"][ind], buff_traj["action"][ind])
         self.replay_buffer.add_rollouts(trajectories)
+
+        for x in range(100):
+            obses = []
+            acses = []
+            for y in range(self.batch_size):
+                buff_traj = self.replay_buffer.paths[random.randint(0, len(self.replay_buffer.paths)-1)]
+                buff_ind = random.randint(0, len(buff_traj["observation"])-1)
+                obses.append(buff_traj["observation"][buff_ind])
+                acses.append(buff_traj["action"][buff_ind])
+                # for ind in range(len(buff_traj["observation"])):
+                #     loss = self.update(buff_traj["observation"][ind], buff_traj["action"][ind])
+            obses = np.array(obses)
+            acses = np.array(acses)
+            loss = self.update(obses, acses)
+            
+        self.beta = self.beta*0.99
+
         return {'episode_loss': loss, 'trajectories': trajectories, 'current_train_envsteps': self.num_traj} #you can return more metadata if you want to
 
 

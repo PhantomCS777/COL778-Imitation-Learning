@@ -13,8 +13,8 @@ configs = {
               "hyperparameters": {
                 'hidden_size': 100,
                 'n_layers': 6,
-                'batch_size': 25, 
-                "num_traj" : 25,
+                'batch_size': 8000, 
+                "num_traj" : 100,
                 "max_len" : 1000,
             },
             "num_iteration": 1000,
@@ -26,8 +26,8 @@ configs = {
               "hyperparameters": {
                 'hidden_size': 100,
                 'n_layers': 6,
-                'batch_size': 25, 
-                "num_traj" : 25,
+                'batch_size': 8000, 
+                "num_traj" : 100,
                 "max_len" : 1000,
             },
             "num_iteration": 1000,
