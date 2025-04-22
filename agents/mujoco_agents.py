@@ -151,14 +151,15 @@ class ImitationAgent(BaseAgent):
             )
         self.model.to(ptu.device)
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr = 3e-4)
+        self.optimizer = optim.Adam(self.model.parameters(), lr = self.hyperparameters["lr"])
         self.criterion = nn.MSELoss()
         self.batch_size = self.hyperparameters["batch_size"]
         self.num_traj = self.hyperparameters["num_traj"]
         self.max_len = self.hyperparameters["max_len"]
         self.beta = 0.8
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
-        
+        self.best_loss = 1e10
+        self.env_name = self.hyperparameters["env_name"]
 
     def forward(self, observation: torch.FloatTensor):
         #*********YOUR CODE HERE******************
@@ -184,7 +185,8 @@ class ImitationAgent(BaseAgent):
         self.scheduler.step()
         return loss.item()
     
-
+    def load_state_dict(self, state_dict, strict=True):
+        return self.model.load_state_dict(state_dict, strict=strict)
 
     def train_iteration(self, env, envsteps_so_far, render=False, itr_num=None, **kwargs):
         if not hasattr(self, "expert_policy"):
@@ -221,6 +223,9 @@ class ImitationAgent(BaseAgent):
             loss = self.update(obses, acses)
             
         self.beta = self.beta*0.99
+        if(self.best_loss > loss):
+            self.best_loss = loss
+            torch.save(self.model.state_dict(), f"best_models/{self.env_name}.pth")
 
         return {'episode_loss': loss, 'trajectories': trajectories, 'current_train_envsteps': self.num_traj} #you can return more metadata if you want to
 

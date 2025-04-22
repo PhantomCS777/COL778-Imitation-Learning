@@ -14,8 +14,10 @@ configs = {
                 'hidden_size': 100,
                 'n_layers': 6,
                 'batch_size': 8000, 
-                "num_traj" : 100,
-                "max_len" : 1000,
+                "num_traj" : 50,
+                "max_len" : 5000,
+                "lr" : 0.0001,
+                "env_name" : "Hopper-v4"
             },
             "num_iteration": 1000,
     },
@@ -27,8 +29,10 @@ configs = {
                 'hidden_size': 100,
                 'n_layers': 6,
                 'batch_size': 8000, 
-                "num_traj" : 100,
+                "num_traj" : 50,
                 "max_len" : 1000,
+                "lr" : 0.0001,
+                "env_name" : "Ant-v4"
             },
             "num_iteration": 1000,
     }
