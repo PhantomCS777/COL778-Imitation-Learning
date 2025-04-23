@@ -138,25 +138,17 @@ class ImitationAgent(BaseAgent):
         
 
         #initialize your model and optimizer and other variables you may need
-        # self.model = nn.Sequential(
-        #         nn.Linear(self.observation_dim, 8*self.observation_dim),
-        #         nn.LeakyReLU(),
-        #         nn.Dropout(0.2),
-        #         nn.Linear(8*self.observation_dim, 4*self.observation_dim),
-        #         nn.LeakyReLU(),
-        #         nn.Dropout(0.1),
-        #         nn.Linear(4*self.observation_dim, 2*self.observation_dim),
-        #         nn.LeakyReLU(),
-        #         nn.Linear(2*self.observation_dim, self.action_dim),
-        #     )
         self.model = nn.Sequential(
-            nn.Linear(self.observation_dim,256),
-            nn.ReLU(),
-            nn.Linear(256,256),
-            nn.ReLU(),
-            nn.Linear(256,self.action_dim) 
-
-        )
+                nn.Linear(self.observation_dim, 8*self.observation_dim),
+                nn.LeakyReLU(),
+                nn.Dropout(0.2),
+                nn.Linear(8*self.observation_dim, 4*self.observation_dim),
+                nn.LeakyReLU(),
+                nn.Dropout(0.1),
+                nn.Linear(4*self.observation_dim, 2*self.observation_dim),
+                nn.LeakyReLU(),
+                nn.Linear(2*self.observation_dim, self.action_dim),
+            )
         self.model.to(ptu.device)
 
         self.optimizer = optim.Adam(self.model.parameters(), lr = self.hyperparameters["lr"])
@@ -224,14 +216,10 @@ class ImitationAgent(BaseAgent):
                 buff_ind = random.randint(0, len(buff_traj["observation"])-1)
                 obses.append(buff_traj["observation"][buff_ind])
                 acses.append(buff_traj["action"][buff_ind])
-
                 # for ind in range(len(buff_traj["observation"])):
-                #     # loss = self.update(buff_traj["observation"][ind], buff_traj["action"][ind])
-                #     obses.append(buff_traj["observation"][ind])
-                #     acses.append(buff_traj["action"][ind]) 
+                #     loss = self.update(buff_traj["observation"][ind], buff_traj["action"][ind])
             obses = np.array(obses)
             acses = np.array(acses)
-            # loss = self.update(buff_traj["observation"], buff_traj["action"])
             loss = self.update(obses, acses)
             
         self.beta = self.beta*0.99
